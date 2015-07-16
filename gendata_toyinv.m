@@ -45,7 +45,7 @@ for i=1:nnlf
     Y(:,i)=g(f)+e;
 end
 
-
+save('toyinvdata.mat','x','Y','f');
 %% end file
 
  
