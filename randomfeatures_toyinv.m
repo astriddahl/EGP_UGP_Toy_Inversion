@@ -11,8 +11,7 @@
 
 
 %% Notes 
-% currently assumes n>d ie feature dimension > input data - need to
-% % update to allow for n<d
+% currently assumes n>=d ie feature dimension >= input data
 % check that don't need lower bound >0 on [0,1) for draws of s_ii
 % check OK to update PI within loop rather from I directly
 % quick fix for univariate x - because Hadamard needs dim>=2?
