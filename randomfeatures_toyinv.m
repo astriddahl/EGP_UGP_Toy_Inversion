@@ -15,6 +15,7 @@
 % check that don't need lower bound >0 on [0,1) for draws of s_ii
 % check OK to update PI within loop rather from I directly
 % quick fix for univariate x - because Hadamard needs dim>=2?
+% implement kernel estimate for cos sine expansion
 
 %% 
 clear;
@@ -73,32 +74,25 @@ for z = 1:k;
 end
 
 VX=VX';
-F=(n^-0.5)*exp(1i*VX);              % return (m x n) feature matrix
+PHI=(n^-0.5)*exp(1i*VX);              % return (m x n) feature matrix
 
 %% cos-sin representation of complex exponential
-Fcos=(n^-0.5)*(cos(VX)+sin(VX));
+PHI_cos=(n^-0.5)*cos(VX);
+PHI_sin=(n^-0.5)*sin(VX);
+PHI_cossin=cat(3,PHI_cos,PHI_sin);    %multidim array where i,j,1=cos; i,j,2=sin
 
-
-save('toyinvdata_randfeatures.mat','F','Fcos');
-%save('testdata_randfeatures.mat','F');
-%% Approximate gram matrix
+save('toyinvdata_randfeatures.mat','PHI','PHI_cossin');
+%% Approximate gram matrix using PHI
 
 K_ff=zeros(m);
 for i = 1:m
     for j = 1:m
-        K_ff(i,j)=F(i,:)*F(j,:)';
+        K_ff(i,j)=PHI(i,:)*PHI(j,:)';
     end
 end
 
-% approximation using cosines
-K_ff_cos=zeros(m);
-for i = 1:m
-    for j = 1:m
-        K_ff_cos(i,j)=Fcos(i,:)*Fcos(j,:)';
-    end
-end
 
-%% exact kernel - check of fastfood approximation to rbf (although NB uses sigma=1 not sigma=0.8)
+%% exact kernel - check of fastfood code/approximation to rbf
 K_exactrbf=zeros(m);
 for i = 1:m
     for j = 1:m
@@ -107,5 +101,4 @@ for i = 1:m
 end
 
 %%
-%save('testdatakernels.mat','K_exactrbf','K_ff','K_ff_cos');
-save('toyinvdatakernels.mat','K_exactrbf','K_ff','K_ff_cos');
+save('toyinvdatakernels.mat','K_exactrbf','K_ff');
