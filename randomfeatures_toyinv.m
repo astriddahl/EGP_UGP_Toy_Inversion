@@ -10,8 +10,8 @@
 % """
 
 
-%% Notes 
-% currently assumes n>=d ie feature dimension >= input data
+% Notes 
+% currently assumes n>=d
 % check that don't need lower bound >0 on [0,1) for draws of s_ii
 % check OK to update PI within loop rather from I directly
 % quick fix for univariate x - because Hadamard needs dim>=2?
@@ -21,11 +21,14 @@ clear;
 
 % load input matrix x
 load toyinvdata.mat;    % contains x (1000x1)
+%load testdata.mat;      % contains x (100,1), [-pi,pi], K=rbf(ell=0.8) using covSEisoU.m from GPML toolbox
 
+%% 
 [m,d_init]=size(x);
-nbases=6;                  % set dimension of finite feature expansion
+nbases=1000;                  % set dimension of finite feature expansion
 sigma=1;                  %set scale for random gaussian matrix
 
+%% 
 %% pad x until d is a power of 2, d>=1
 
 % fix to pad x in the univariate case
@@ -72,5 +75,37 @@ end
 VX=VX';
 F=(n^-0.5)*exp(1i*VX);              % return (m x n) feature matrix
 
-save('toyinvdata_randfeatures.mat','F');
+%% cos-sin representation of complex exponential
+Fcos=(n^-0.5)*(cos(VX)+sin(VX));
 
+
+save('toyinvdata_randfeatures.mat','F','Fcos');
+%save('testdata_randfeatures.mat','F');
+%% Approximate gram matrix
+
+K_ff=zeros(m);
+for i = 1:m
+    for j = 1:m
+        K_ff(i,j)=F(i,:)*F(j,:)';
+    end
+end
+
+% approximation using cosines
+K_ff_cos=zeros(m);
+for i = 1:m
+    for j = 1:m
+        K_ff_cos(i,j)=Fcos(i,:)*Fcos(j,:)';
+    end
+end
+
+%% exact kernel - check of fastfood approximation to rbf (although NB uses sigma=1 not sigma=0.8)
+K_exactrbf=zeros(m);
+for i = 1:m
+    for j = 1:m
+        K_exactrbf(i,j)=exp(-norm(x(i,:)-x(j,:))^2/(2*sigma^2));
+    end
+end
+
+%%
+%save('testdatakernels.mat','K_exactrbf','K_ff','K_ff_cos');
+save('toyinvdatakernels.mat','K_exactrbf','K_ff','K_ff_cos');
