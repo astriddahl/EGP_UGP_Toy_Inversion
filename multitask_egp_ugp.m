@@ -85,11 +85,11 @@ dims=[N,D,P,Q];
                       % ***at present implemented for grad desc only
 % predict           - choose whether to perform prediction step (1=yes/0=no)
 predict=0; 
-maxiter=1;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
+maxiter=2;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
 conv=0.01;                %- choose convergence threshold (for params)
 % setseed           - choose rng seed
 %nsamples=10000;     % as per paper 1 (currently not used)
-a=0.9;                % choose initial learning rate for grad descent
+a=0.5;                % choose initial learning rate for grad descent
 
 
 % starting values - choose M0, delta0, lamda0, theta0
@@ -192,7 +192,7 @@ if deltah>conv
             
             %learning step
             mk1=mk-a^v*inv(H)*dF;       %learning rate decays exponentially
-            deltam=norm(abs(mk1-mk))
+            
            
             % report F at each iteration
             M=mk1';
@@ -210,7 +210,7 @@ if deltah>conv
             
             
         end % m+converged. If deltam below conv on last loop, M+ stops at mk1
-        
+        deltam=norm(abs(mk1-mk))
         end
         %end of loop to optimise M
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -219,11 +219,12 @@ if deltah>conv
     % will be called by 'nelbo' function)
     %[x,f,exitflag,output]=minFunc(fobj, hparams,options);
     [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA);
-    deltah=norm(abs(x-hparams));
+    
     Ftrack(w)=f;
     hold on;
     plot(Ftrack(w),'-d');
-end        
+end
+deltah=norm(abs(x-hparams));
 end
 %end of loop to optimise hyperparameters and M,C
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
