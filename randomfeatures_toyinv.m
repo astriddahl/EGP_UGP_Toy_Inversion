@@ -26,10 +26,10 @@ load toyinvdata.mat;    % contains x (1000x1)
 
 %% 
 [m,d_init]=size(x);
-nbases=1000;                  % set dimension of finite feature expansion
+nbases=500;                  % set dimension of finite feature expansion
 sigma=1;                  %set scale for random gaussian matrix
 
-%% 
+ 
 %% pad x until d is a power of 2, d>=1
 
 % fix to pad x in the univariate case
@@ -50,7 +50,7 @@ X=[x,x_add];                % X expanded input matrix (m by d)
 X_dash=X';
 
 
-%% 
+ 
 %% generate V
 % for each input vector x (d x 1) generate V 1 to k, Vj is d x d, stack Vj
 % to produce V (n x d)
@@ -76,7 +76,13 @@ end
 VX=VX';
 PHI=(n^-0.5)*exp(1i*VX);              % return (m x n) feature matrix
 
-%% cos-sin representation of complex exponential
+%% export feature input matrix - unscaled - for egp/ugp
+% phi_in defined as sigma*VX' (returns n x m (unscaled by sigma) feature input
+% matrix)
+phi_in=sigma*VX';
+save('toyinvdata_phi_in.mat','phi_in');
+
+%% cos-sin rather than complex exponential
 PHI_cos=(n^-0.5)*cos(VX);
 PHI_sin=(n^-0.5)*sin(VX);
 PHI_cossin=cat(3,PHI_cos,PHI_sin);    %multidim array where i,j,1=cos; i,j,2=sin
@@ -90,7 +96,6 @@ for i = 1:m
         K_ff(i,j)=PHI(i,:)*PHI(j,:)';
     end
 end
-
 
 %% exact kernel - check of fastfood code/approximation to rbf
 K_exactrbf=zeros(m);
