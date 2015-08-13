@@ -6,24 +6,20 @@
 %% Notes
 % data description etc
 % NB notation follows paper above (multitask paper) except: LAMBDA matrix
-% renamed to DELTA to avoid confusion with matrix of diag(lambda_q)
-% need to set some breakpoints
+%   renamed to DELTA to avoid confusion with matrix of diag(lambda_q)
 % need to implement options for phi - currently set up for RBF
-% need to check whether delta must stay diagonal
 % need to implement Cq for multi Q - at present only for Q=1
-% rewrite matrix definitions at start to specify vectors for diags for
-% update
+
 % implement stat linearisation
 % implement multi-P, multi-Q for nonlinear function g and gn (currently
 % scalar only), M (currently M==mq where noted, needs updating to loop over
 % q)
 % implement calculation of J_n for multi-d (currently scalar input only)
-% learning rate currently fixed as constant
 % need to check whether D scaling for random features PHI needs
-% doubling/halving when split into sin and cos.
 % check Jacobians for P>1
-% check gradient definitions for hyperparameters - capture indirect derivs
-% fix user supplied gradient for theta - not correct at present.
+% fix gradient definitions for theta - capture indirect derivs
+% check loop exits
+
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -85,8 +81,9 @@ dims=[N,D,P,Q];
                       % ***at present implemented for grad desc only
 % predict           - choose whether to perform prediction step (1=yes/0=no)
 predict=0; 
-maxiter=2;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
+maxiter=3;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
 conv=0.01;                %- choose convergence threshold (for params)
+deltam=1;           %initialise convergence measure for inner loop > conv
 % setseed           - choose rng seed
 %nsamples=10000;     % as per paper 1 (currently not used)
 a=0.5;                % choose initial learning rate for grad descent
@@ -95,14 +92,12 @@ a=0.5;                % choose initial learning rate for grad descent
 % starting values - choose M0, delta0, lamda0, theta0
 M0=0.5;             % initialised at m=0.5 for all mq
 M=M0*ones(Q,D);     % approx mean vec for each task Q, feature D. mq=M(q,:) - 1xD
-d0=.8;
+d0=1;
 DELTA=d0*diag(ones(P,1));  % note this is actually the matrix LAMBDA in multitask egp paper
 lam0=1;             % LAMBDA (set to diag vii=1)
 LAMBDA=lam0*diag(ones(Q,1));         %lamda(q,q)=lamdaq
 th0=1;
 theta=th0;           % single parameter sigma for random gaussian features
-deltam=1;           %initialise convergence measure for inner loop > conv
-
 
 
 % set options for minfunc solver
@@ -153,7 +148,7 @@ for w=1:maxiter
         plot(Ftrack(w),'-d');        
     end
     
-if deltah>conv
+if deltah>conv || deltam>conv
     
     %redefine hyperparameters based on hparamest
     hparams=x;
@@ -170,9 +165,10 @@ if deltah>conv
         %Step 2. Loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
         % for Q>1 insert loop over q here
         mk1=M';                      %for Q=1 only NB M is QxD but each mq is Dx1       
+        dd=-1;                       % initialise divergence measure.
         for v=1:maxiter             %loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
             display(v);
-        if deltam>conv           
+        if deltam>conv && dd<0           
             mk=mk1;
             dF=zeros(D,1);          % may need fixing for Q>1
             H=zeros(D,D);
@@ -207,10 +203,15 @@ if deltah>conv
                 H=H-ILAM*eye(D);            % needs review for Q>1 - won't work
             C=-inv(H);                  % NB implemented for Q=1 only
             fullF=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
-            
-            
+            dd=deltam;
+            deltam=norm(abs(mk1-mk))
+            dd=deltam-dd
+        else
+            display('diverge - exit inner loop');
+            return
+        
         end % m+converged. If deltam below conv on last loop, M+ stops at mk1
-        deltam=norm(abs(mk1-mk))
+        
         end
         %end of loop to optimise M
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -223,6 +224,9 @@ if deltah>conv
     Ftrack(w)=f;
     hold on;
     plot(Ftrack(w),'-d');
+else
+    display('converged');
+    return
 end
 deltah=norm(abs(x-hparams));
 end

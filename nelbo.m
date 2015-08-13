@@ -42,8 +42,9 @@ function [F,grad] = nelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
     PHI(D/2+1:D,:)=sin(phi_in/theta);
     PHI=sqrt(2/D)*PHI;       %reestimate phi with new hparams. Note scaling must be (D/2)^-0.5 (features are duples)
     % generate partial expression for gradient vector
-    %g_theta_arg=theta^-2*phi_in.*(PHI(D/2+1:D,:)-PHI(1:D/2,:));
-    g_theta_arg=theta^-2*[phi_in;-phi_in].*PHI;
+    %   =1/sigma^2(-sqrt(2/D)*cos(phi_in/sigma)*phi_in/sigma^2 or +sin
+    %   equivalent)
+    g_theta_arg=theta^-2*[-phi_in;phi_in].*PHI;
     
     % calculation of F split into F=F1+F2+F3 corresponding to three terms
     % comprising eqn(26)
