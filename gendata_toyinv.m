@@ -7,14 +7,19 @@
 % requires GPML toolbox
 % http://www.gaussianprocess.org/gpml/code/matlab/doc/
 
+% alternate use for RBF kernel: implemented for sigma=0.9
+
 clear;
 n=1000;
 x=linspace(-2*pi,2*pi,n)';
-ell=0.8
+ell=0.9
 sf=0.6
 
-%matern kernel (from GPML toolbox doc - address above)
-covfunc = {@covMaterniso, 5}; hyp.cov = log([ell; sf]); % Matern class d=5
+addpath(genpath('C:\Program Files\MATLAB\R2014b\astridlib')); %requires minfunc, opt toolbox and (for toyinvdata generation) gpmltoolbox
+%matern kernel
+%covfunc = {@covMaterniso, 5}; hyp.cov = log([ell; sf]); % Matern class d=5
+% rbf kernel
+covfunc = {@covSEisoU}; hyp.cov = log([ell]); % rbf kernel with sigma^2=0.9^2.
 K = feval(covfunc{:}, hyp.cov, x);
 
 %sample f from GP (code from Mathmonk19.4)
@@ -25,7 +30,11 @@ f=A*sqrt(S)*u;  % f~N(0,K)
 plot(x, f, '+')
 
 %% generate y=g(f)+e, e~N(0,0.2^2)
-sige=0.2
+% sige=0.2
+% e=randn(n,1)*sige;
+
+%for debugging generate more variable ydata:
+sige=2;
 e=randn(n,1)*sige;
 
 % nonlinear functions g(f)

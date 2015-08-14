@@ -21,13 +21,13 @@
 clear;
 
 % load input matrix x
-load toyinvdata.mat;    % contains x (1000x1)
+load toyinvdata.mat;    % contains x (1000x1) and y
 %load testdata.mat;      % contains x (100,1), [-pi,pi], K=rbf(ell=0.8) using covSEisoU.m from GPML toolbox
 
 %% 
 [m,d_init]=size(x);
 nbases=500;                  % set dimension of finite feature expansion
-sigma=1;                  %set scale for random gaussian matrix
+sigma=0.9;                  %set scale for random gaussian matrix (corresponds to rbf kernel with sigma^2=0.9^2)
 
  
 %% pad x until d is a power of 2, d>=1

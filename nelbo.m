@@ -1,4 +1,4 @@
-function [F,grad] = nelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
+function [F,grad] = nelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA,theta)
 % Calculation of Negative Evidence Lower Bound (nelbo)
 
 % Also calculates gradient of nelbo with respect to delta and theta
@@ -35,12 +35,13 @@ function [F,grad] = nelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
     [N,D,P,Q]=deal(dims{:});
     DELTA=diag(hparams(1:P));
     IDEL=1/DELTA;
-    theta=hparams(P+1:end);
+    %theta=hparams(P+1:end);    fix theta - passed in separately
     
     % generate PHI cos and sin features
     PHI(1:D/2,:)=cos(phi_in/theta);
     PHI(D/2+1:D,:)=sin(phi_in/theta);
     PHI=sqrt(2/D)*PHI;       %reestimate phi with new hparams. Note scaling must be (D/2)^-0.5 (features are duples)
+    
     % generate partial expression for gradient vector
     %   =1/sigma^2(-sqrt(2/D)*cos(phi_in/sigma)*phi_in/sigma^2 or +sin
     %   equivalent)
@@ -82,5 +83,8 @@ function [F,grad] = nelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
     end
     F=-0.5*sum([F1,F2,F3]);   % EQN(26)
     grad=-0.5*grad;         % grad based on EQN(26)
+    
+    %for fixed theta:
+    grad=grad(1:P);
            
 end

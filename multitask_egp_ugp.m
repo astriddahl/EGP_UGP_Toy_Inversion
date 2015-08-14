@@ -19,7 +19,8 @@
 % check Jacobians for P>1
 % fix gradient definitions for theta - capture indirect derivs
 % check loop exits
-
+% change names of nelbo and fullnelbo to freeE (since min free energy=F)
+% 
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -58,6 +59,11 @@ nlf=1;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % code for toyinvdata: Y matrix contains 5 alternative values for Y nlf
+% toyinvdata and phi_in parameter values:
+    %true RBF and random features sigma=0.9   
+    % true sigma_e for all y=g(f)+e sige=0.2
+    % true sigma_f for f=phiw sigma_f=1 
+
     load 'toyinvdata.mat';      % true f also included for toyinvdata.mat
     load toyinvdata_phi_in.mat;   % contains "phi_in" random matrix DxN - input to generate PHI
 
@@ -81,22 +87,22 @@ dims=[N,D,P,Q];
                       % ***at present implemented for grad desc only
 % predict           - choose whether to perform prediction step (1=yes/0=no)
 predict=0; 
-maxiter=3;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
+maxiter=5;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
 conv=0.01;                %- choose convergence threshold (for params)
 deltam=1;           %initialise convergence measure for inner loop > conv
 % setseed           - choose rng seed
 %nsamples=10000;     % as per paper 1 (currently not used)
-a=0.5;                % choose initial learning rate for grad descent
+a=0.9;                % choose initial learning rate for grad descent
 
 
 % starting values - choose M0, delta0, lamda0, theta0
-M0=0.5;             % initialised at m=0.5 for all mq
+M0=0.0001;             % initialised for all mq
 M=M0*ones(Q,D);     % approx mean vec for each task Q, feature D. mq=M(q,:) - 1xD
-d0=1;
+d0=2;
 DELTA=d0*diag(ones(P,1));  % note this is actually the matrix LAMBDA in multitask egp paper
 lam0=1;             % LAMBDA (set to diag vii=1)
 LAMBDA=lam0*diag(ones(Q,1));         %lamda(q,q)=lamdaq
-th0=1;
+th0=0.9;
 theta=th0;           % single parameter sigma for random gaussian features
 
 
@@ -127,7 +133,7 @@ for z=1:N                                       % calculate Fn (sum elements of 
         H=H+Hn;                                 %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only     
 end
 ILAM=1/LAMBDA;   % lambda_q are treated as fixed priors and not optimised in this model
-H=H-ILAM*eye(D);            % needs review for Q>1 - won't work
+H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
 C=-inv(H);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -137,29 +143,37 @@ C=-inv(H);
 Ftrack=zeros(maxiter,1);
 
 % initial values hyperparameters
-hparams0=[diag(DELTA)', theta]';
+% hparams0=[diag(DELTA)', theta]';  fixing theta at true value
+hparams0=diag(DELTA);
 for w=1:maxiter 
     if w==1
         hparams=hparams0;
         %[x,f,exitflag,output]=minFunc(fobj,hparams,options);  
-        [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA);
+        [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA,theta);
+        if isreal(f)==0
+            display('F complex');
+            return;
+        end
         deltah=norm(abs(x-hparams));
         Ftrack(w)=f;
         plot(Ftrack(w),'-d');        
+        
     end
     
 if deltah>conv || deltam>conv
-    
+    display(w);
     %redefine hyperparameters based on hparamest
-    hparams=x;
+    hparams=x    %DELTA update displayed here.
+    display(hparams);
     DELTA=diag(hparams(1:P));
     IDEL=1/DELTA;
-    theta=hparams(P+1:end);
-    %update PHI
-    PHI=zeros(D,N);
-    PHI(1:D/2,:)=cos(phi_in/theta);
-    PHI(D/2+1:D,:)=sin(phi_in/theta);
-    PHI=sqrt(2/D)*PHI;
+        % For free theta:
+        %theta=hparams(P+1:end);
+%         update PHI
+            PHI=zeros(D,N);
+            PHI(1:D/2,:)=cos(phi_in/theta);
+            PHI(D/2+1:D,:)=sin(phi_in/theta);
+            PHI=sqrt(2/D)*PHI;
     
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %Step 2. Loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
@@ -168,7 +182,7 @@ if deltah>conv || deltam>conv
         dd=-1;                       % initialise divergence measure.
         for v=1:maxiter             %loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
             display(v);
-        if deltam>conv && dd<0           
+        if deltam>conv %&& dd<1           %should be zero really
             mk=mk1;
             dF=zeros(D,1);          % may need fixing for Q>1
             H=zeros(D,D);
@@ -183,8 +197,9 @@ if deltah>conv || deltam>conv
                 Hn=phi_n*J_n'*IDEL*J_n*phi_n';          % implemented for Q=1 only (eqn(11))-should extract q column of J_n
                 H=H+Hn;                      %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only
             end
+            checksum=H(1:5,1:5);             %display hessian sum - check pos
             dF=dF-ILAM*mk;
-            H=H-ILAM*eye(D);            % needs review for Q>1 - won't work
+            H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
             
             %learning step
             mk1=mk-a^v*inv(H)*dF;       %learning rate decays exponentially
@@ -200,18 +215,27 @@ if deltah>conv || deltam>conv
                 Hn=phi_n*J_n'*(1/DELTA)*J_n*phi_n';    % implemented for Q=1 only (eqn(11))-should extract q column of J_n
                 H=H+Hn;                                 %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only     
                 end
-                H=H-ILAM*eye(D);            % needs review for Q>1 - won't work
-            C=-inv(H);                  % NB implemented for Q=1 only
-            fullF=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
+                H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
+                C=-inv(H);                  % NB implemented for Q=1 only
+            [C_chol,p]=chol(C,'lower');
+                if p~=0
+                    display('C not positive definite');
+                end
+            fullF=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA,theta)
+                if isreal(f)==0
+                display('F complex');
+                return;
+                end
             dd=deltam;
             deltam=norm(abs(mk1-mk))
             dd=deltam-dd
-        else
-            display('diverge - exit inner loop');
-            return
+            display('average M');
+            display(mean(M));
         
         end % m+converged. If deltam below conv on last loop, M+ stops at mk1
-        
+            if deltam<conv
+                break;                  %do not complete remaining w iters
+            end
         end
         %end of loop to optimise M
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -219,17 +243,23 @@ if deltah>conv || deltam>conv
     % re-optimise hyperparameters using updated optimised M+ and C+ (which
     % will be called by 'nelbo' function)
     %[x,f,exitflag,output]=minFunc(fobj, hparams,options);
-    [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA);
-    
+    [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA,theta);
+    if isreal(f)==0
+        display('F complex');
+        return;
+    end
     Ftrack(w)=f;
     hold on;
     plot(Ftrack(w),'-d');
-else
-    display('converged');
-    return
+
 end
 deltah=norm(abs(x-hparams));
+    if deltam<conv && deltah<conv
+        display('converged');            
+        return;                  %do not complete remaining w iters
+    end
 end
+
 %end of loop to optimise hyperparameters and M,C
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%
@@ -244,11 +274,10 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Prediction
-if predict==1
-   %perform prediction steps 
-end
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% if predict==1
+%    %perform prediction steps 
+% end
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Evaluation/results/output
-%   include alternative method for comparison?
-%   diagnostics
+
 

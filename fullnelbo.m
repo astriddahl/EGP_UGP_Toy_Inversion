@@ -1,4 +1,4 @@
-function [fullF]=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
+function [fullF]=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA,theta)
 % Calculation of Negative Evidence Lower Bound (nelbo) - full expression
 % full expression for nelbo = eqn(8)-eqn(5)
 % A Dahl August 2015
@@ -29,7 +29,7 @@ function [fullF]=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
     [N,D,P,Q]=deal(dims{:});
     DELTA=diag(hparams(1:P));
     IDEL=1/DELTA;
-    theta=hparams(P+1:end);
+    %theta=hparams(P+1:end);
     
     % generate PHI cos and sin features
     PHI(1:D/2,:)=cos(phi_in/theta);
@@ -63,7 +63,7 @@ function [fullF]=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA)
         Fq=1/(LAMBDA(q,q))*(trace(Cq)+(mq*mq'))-log(det(Cq))+D*log(LAMBDA(q,q))-D;
         F3=F3+Fq;
     end
-    fullF=-0.5*sum([F1,F2,F3]);
+    fullF=-0.5*sum([F1,F2,F3]);  % free energy
     
            
 end
