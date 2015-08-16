@@ -92,11 +92,11 @@ conv=0.01;                %- choose convergence threshold (for params)
 deltam=1;           %initialise convergence measure for inner loop > conv
 % setseed           - choose rng seed
 %nsamples=10000;     % as per paper 1 (currently not used)
-a=0.9;                % choose initial learning rate for grad descent
+a=0.5;                % choose initial learning rate for grad descent
 
 
 % starting values - choose M0, delta0, lamda0, theta0
-M0=0.0001;             % initialised for all mq
+M0=2;             % initialised for all mq
 M=M0*ones(Q,D);     % approx mean vec for each task Q, feature D. mq=M(q,:) - 1xD
 d0=2;
 DELTA=d0*diag(ones(P,1));  % note this is actually the matrix LAMBDA in multitask egp paper
@@ -140,123 +140,132 @@ C=-inv(H);
 %% Step 1. Loop to optimise hyperparameters given m - set up for numerical optimisation
 
 % track objective function value
-Ftrack=zeros(maxiter,1);
-
+Fouter=zeros(maxiter,1);
+Finner=zeros(maxiter,1);
 % initial values hyperparameters
 % hparams0=[diag(DELTA)', theta]';  fixing theta at true value
 hparams0=diag(DELTA);
 for w=1:maxiter 
     if w==1
         hparams=hparams0;
-        %[x,f,exitflag,output]=minFunc(fobj,hparams,options);  
+        deltah=1;           % initialise convergence threshold for hparams
+    end
+    
+   
+%         [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA,theta);
+%         if isreal(f)==0
+%             display('F complex');
+%             return;
+%         end
+%         deltah=norm(abs(x-hparams))
+%         Fouter(w)=f;
+%         plot(Fouter(w),'-d');        
+
+    
+    
+    if  deltah>conv        %deltah not defined for fixed hparams
+        display(w);
+        %redefine hyperparameters based on hparamest
+        display(hparams);
+        DELTA=diag(hparams(1:P));
+        IDEL=1/DELTA;
+            % For free theta:
+            %theta=hparams(P+1:end);
+    %         update PHI
+                PHI=zeros(D,N);
+                PHI(1:D/2,:)=cos(phi_in/theta);
+                PHI(D/2+1:D,:)=sin(phi_in/theta);
+                PHI=sqrt(2/D)*PHI;
+
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            %Step 2. Loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
+            % for Q>1 insert loop over q here
+            mk1=M';                      %for Q=1 only NB M is QxD but each mq is Dx1       
+            dd=-1;                       % initialise divergence measure.
+            deltam=1;                    % reset convergence measure for m
+            for v=1:maxiter             %loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
+                display(v);
+            if deltam>conv %&& dd<1           %dd divergence threshold should be zero really
+                mk=mk1;
+                dF=zeros(D,1);          % may need fixing for Q>1
+                H=zeros(D,D);
+                for z = 1:N             % update 1:N
+                    y_n=Y(z,:)';
+                    phi_n=PHI(:,z);     %phi(xn) Dx1 vec
+                    f=phi_n'*mk;
+                    gn=g(f);                        %g maps Qx1 to Px1 - both scalar at present
+                    J_n=J(f);                       %"Jacobian" dg/df
+                    dFn=J_n*IDEL*(y_n-gn)*phi_n; % for multitask probably needs amending from eqn (15): phi_n to phi_n'
+                    dF=dF+dFn;                     % add dFn to cumulative sum over n to be output from n-loop
+                    Hn=phi_n*J_n'*IDEL*J_n*phi_n';          % implemented for Q=1 only (eqn(11))-should extract q column of J_n
+                    H=H+Hn;                      %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only
+                end
+                checksum=H(1:5,1:5);             %display hessian sum - check pos
+                dF=dF-ILAM*mk;
+                H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
+
+                %learning step
+                mk1=mk-a^1*inv(H)*dF;       %learning rate decays exponentially (FIXED AT 0.5)
+
+
+                % report F at each iteration
+                M=mk1';
+                    H=zeros(D,D);
+                    for z=1:N                                       
+                    phi_n=PHI(:,z);
+                    f=M*phi_n;
+                    J_n=J(f);                               %"Jacobian" dg/df
+                    Hn=phi_n*J_n'*(1/DELTA)*J_n*phi_n';    % implemented for Q=1 only (eqn(11))-should extract q column of J_n
+                    H=H+Hn;                                 %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only     
+                    end
+                    H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
+                    C=-inv(H);                  % NB implemented for Q=1 only
+                [C_chol,p]=chol(C,'lower');
+                    if p~=0
+                        display('C not positive definite');
+                    end
+                fullF=fullelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA,theta)
+                    if isreal(fullF)==0
+                    display('F complex');
+                    return;
+                    end
+                dd1=deltam;                  % carry over prev value
+                deltam=norm(abs(mk1-mk))    %update deltam
+                dd=deltam-dd1                %calc change in deltam (ie check not diverging)
+                display('average M');
+                display(mean(M));
+                Finner(v)=-fullF;
+                plot(Finner,'--+');
+
+            end % m+converged. If deltam below conv on last loop, M+ stops at mk1
+                if deltam<conv
+                    break;                  %do not complete remaining w iters
+                end
+            end
+            %end of loop to optimise M
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        % re-optimise hyperparameters using updated optimised M+ and C+ 
+
+
+        display('Updating NELBO with converged M+, C+...');
         [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA,theta);
         if isreal(f)==0
             display('F complex');
             return;
         end
-        deltah=norm(abs(x-hparams));
-        Ftrack(w)=f;
-        plot(Ftrack(w),'-d');        
-        
-    end
-    
-if deltah>conv || deltam>conv
-    display(w);
-    %redefine hyperparameters based on hparamest
-    hparams=x    %DELTA update displayed here.
-    display(hparams);
-    DELTA=diag(hparams(1:P));
-    IDEL=1/DELTA;
-        % For free theta:
-        %theta=hparams(P+1:end);
-%         update PHI
-            PHI=zeros(D,N);
-            PHI(1:D/2,:)=cos(phi_in/theta);
-            PHI(D/2+1:D,:)=sin(phi_in/theta);
-            PHI=sqrt(2/D)*PHI;
-    
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        %Step 2. Loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
-        % for Q>1 insert loop over q here
-        mk1=M';                      %for Q=1 only NB M is QxD but each mq is Dx1       
-        dd=-1;                       % initialise divergence measure.
-        for v=1:maxiter             %loop to optimise M: hyperparameters fixed at DELTA/IDEL, LAMBDA/ILAM, theta
-            display(v);
-        if deltam>conv %&& dd<1           %should be zero really
-            mk=mk1;
-            dF=zeros(D,1);          % may need fixing for Q>1
-            H=zeros(D,D);
-            for z = 1:N             % update 1:N
-                y_n=Y(z,:)';
-                phi_n=PHI(:,z);     %phi(xn) Dx1 vec
-                f=phi_n'*mk;
-                gn=g(f);                        %g maps Qx1 to Px1 - both scalar at present
-                J_n=J(f);                       %"Jacobian" dg/df
-                dFn=J_n*IDEL*(y_n-gn)*phi_n; % for multitask probably needs amending from eqn (15): phi_n to phi_n'
-                dF=dF+dFn;                     % add dFn to cumulative sum over n to be output from n-loop
-                Hn=phi_n*J_n'*IDEL*J_n*phi_n';          % implemented for Q=1 only (eqn(11))-should extract q column of J_n
-                H=H+Hn;                      %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only
-            end
-            checksum=H(1:5,1:5);             %display hessian sum - check pos
-            dF=dF-ILAM*mk;
-            H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
             
-            %learning step
-            mk1=mk-a^v*inv(H)*dF;       %learning rate decays exponentially
-            
-           
-            % report F at each iteration
-            M=mk1';
-                H=zeros(D,D);
-                for z=1:N                                       
-                phi_n=PHI(:,z);
-                f=M*phi_n;
-                J_n=J(f);                               %"Jacobian" dg/df
-                Hn=phi_n*J_n'*(1/DELTA)*J_n*phi_n';    % implemented for Q=1 only (eqn(11))-should extract q column of J_n
-                H=H+Hn;                                 %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only     
-                end
-                H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
-                C=-inv(H);                  % NB implemented for Q=1 only
-            [C_chol,p]=chol(C,'lower');
-                if p~=0
-                    display('C not positive definite');
-                end
-            fullF=fullnelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA,theta)
-                if isreal(f)==0
-                display('F complex');
-                return;
-                end
-            dd=deltam;
-            deltam=norm(abs(mk1-mk))
-            dd=deltam-dd
-            display('average M');
-            display(mean(M));
-        
-        end % m+converged. If deltam below conv on last loop, M+ stops at mk1
-            if deltam<conv
-                break;                  %do not complete remaining w iters
-            end
-        end
-        %end of loop to optimise M
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        
-    % re-optimise hyperparameters using updated optimised M+ and C+ (which
-    % will be called by 'nelbo' function)
-    %[x,f,exitflag,output]=minFunc(fobj, hparams,options);
-    [x,f,exitflag,output]=minFunc(@nelbo,hparams,options,M,C,phi_in,Y,dims,nlf,LAMBDA,theta);
-    if isreal(f)==0
-        display('F complex');
-        return;
-    end
-    Ftrack(w)=f;
-    hold on;
-    plot(Ftrack(w),'-d');
+        deltah=norm(abs(x-hparams))       
+        hparams=x               % parameter update
+        Fouter(w)=f;
+        hold on;
+        plot(Fouter(w),'-d');
 
-end
-deltah=norm(abs(x-hparams));
-    if deltam<conv && deltah<conv
+    end
+    
+    if deltam<conv  && deltah<conv 
         display('converged');            
-        return;                  %do not complete remaining w iters
+        break;                  %do not complete remaining w iters
     end
 end
 
