@@ -36,7 +36,7 @@ clear;
     
 
 % g(Wphi)              - choose nonlinear transform (nlf) of f=Wphi (TBC)
-nlf=1;
+nlf=3;
     switch nlf
         case 1; g=@(f) f; 
                 J=@(f) 1;    %Jacobian J(f=M*phi_n)
@@ -87,12 +87,12 @@ dims=[N,D,P,Q];
                       % ***at present implemented for grad desc only
 % predict           - choose whether to perform prediction step (1=yes/0=no)
 predict=0; 
-maxiter=5;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
-conv=0.01;                %- choose convergence threshold (for params)
+maxiter=50;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
+conv=0.001;                %- choose convergence threshold (for params)
 deltam=1;           %initialise convergence measure for inner loop > conv
 % setseed           - choose rng seed
 %nsamples=10000;     % as per paper 1 (currently not used)
-a=0.5;                % choose initial learning rate for grad descent
+a=0.9;                % choose initial learning rate for grad descent
 
 
 % starting values - choose M0, delta0, lamda0, theta0
@@ -107,7 +107,7 @@ theta=th0;           % single parameter sigma for random gaussian features
 
 
 % set options for minfunc solver
-options=struct('numDiff',1,'DerivativeCheck','off','Method','lbfgs');
+options=struct('numDiff',0,'DerivativeCheck','on','Method','lbfgs');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PARAMETER ESTIMATION
@@ -132,6 +132,7 @@ for z=1:N                                       % calculate Fn (sum elements of 
         Hn=phi_n*J_n'*(1/DELTA)*J_n*phi_n';    % implemented for Q=1 only (eqn(11))-should extract q column of J_n
         H=H+Hn;                                 %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only     
 end
+%%
 ILAM=1/LAMBDA;   % lambda_q are treated as fixed priors and not optimised in this model
 H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
 C=-inv(H);
@@ -205,7 +206,7 @@ for w=1:maxiter
                 H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
 
                 %learning step
-                mk1=mk-a^1*inv(H)*dF;       %learning rate decays exponentially (FIXED AT 0.5)
+                mk1=mk-a^(v/2)*inv(H)*dF;       %learning rate decays slowly
 
 
                 % report F at each iteration
