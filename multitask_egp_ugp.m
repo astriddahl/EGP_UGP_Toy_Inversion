@@ -1,3 +1,4 @@
+function [fhat,yhat,mse,nlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
 % Implementation of Multi-task Extended and Unscented Gaussian Process - a
 % la carte (Steinberg and Bonilla)
 % code by A Dahl 2015
@@ -19,6 +20,7 @@
 % check Jacobians for P>1
 % fix gradient definitions for theta - capture indirect derivs
 % check loop exits
+
 % change names of nelbo and fullnelbo to freeE (since min free energy=F)
 % 
 
@@ -36,7 +38,7 @@ clear;
     
 
 % g(Wphi)              - choose nonlinear transform (nlf) of f=Wphi (TBC)
-nlf=3;
+%nlf=1;                %- now passed in from multitask_egp_prediction.m
     switch nlf
         case 1; g=@(f) f; 
                 J=@(f) 1;    %Jacobian J(f=M*phi_n)
@@ -57,23 +59,7 @@ nlf=3;
 %fobj=@(hparams) nelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA);
 %%
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% code for toyinvdata: Y matrix contains 5 alternative values for Y nlf
-% toyinvdata and phi_in parameter values:
-    %true RBF and random features sigma=0.9   
-    % true sigma_e for all y=g(f)+e sige=0.2
-    % true sigma_f for f=phiw sigma_f=1 
 
-    load 'toyinvdata.mat';      % true f also included for toyinvdata.mat
-    load toyinvdata_phi_in.mat;   % contains "phi_in" random matrix DxN - input to generate PHI
-
-    % code to break up toyinvdata Y and choose which (Y1 to Y5) - works for
-    % P=1
-    Y_allcases=Y;           % preserve set
-    Y=Y_allcases(:,nlf);
-
-% end of extra code for toyinvdata
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % define dimensions N (nobs), D (no features), P (no output), Q (no tasks)
 % add line specifying number of features to generate (D) and N=length x
@@ -201,7 +187,6 @@ for w=1:maxiter
                     Hn=phi_n*J_n'*IDEL*J_n*phi_n';          % implemented for Q=1 only (eqn(11))-should extract q column of J_n
                     H=H+Hn;                      %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only
                 end
-                checksum=H(1:5,1:5);             %display hessian sum - check pos
                 dF=dF-ILAM*mk;
                 H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
 
@@ -266,6 +251,7 @@ for w=1:maxiter
     
     if deltam<conv  && deltah<conv 
         display('converged');            
+        optresult='converged';
         break;                  %do not complete remaining w iters
     end
 end
@@ -284,10 +270,40 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Prediction
-% if predict==1
-%    %perform prediction steps 
-% end
+if predict==1
+   %generate [fhat,yhat,mse,nlpd] using Ytest,ftest,phi_intest
+   Y=Ytest;
+   phi_in=phi_intest;
+   f=ftest;
+        %update PHI with phi_intest
+                ntest=length(Y);
+                PHI=zeros(D,ntest);
+                PHI(1:D/2,:)=cos(phi_in/theta);
+                PHI(D/2+1:D,:)=sin(phi_in/theta);
+                PHI=sqrt(2/D)*PHI;
+    % calculate fhat,yhat, y-yhat, P(fhat)
+    % insert matrix to gather n predictions/differences
+                for z=1:ntest                                       
+                    y_n=Y(z,:)';
+                    phi_n=PHI(:,z);
+                    fhatn=M*phi_n;
+                    J_n=J(fhatn);
+                    vecn=J_n*M*phi_in;
+                    b_n=g(fhatn)-vecn;
+                    yhatn=vecn+b_n;             % just realised this is g(fhatn) so vecn and b_n may be redundant
+                    v_yhatn=DELTA+J_n*phi_n'*C*phi_n*J_n';  %implemented for Q=1 only    
+                    dyn=y_n-yhatn;
+                    %p_fn=P(f_qn|phi_n,M,C)~N(phi_n'm,phi_n'Cphi_n)
+                    % find function to return value of normal function with
+                    % above parameters
+                end
+                    
+   % calculate MSME and NLPD scores
+                    
+                      
+end
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Evaluation/results/output
-
-
+optimresults={M,C,hparams,Finner,Fouter,optresult};
+%% end of function
+end
