@@ -18,10 +18,7 @@ addpath(genpath('C:\Program Files\MATLAB\R2014b\astridlib')); %includes minfunc,
 addpath(genpath('C:\Users\adahl\Documents\MATLAB\EGP_UGP'));    %includes multitask_egp_ugp.m, nelbo.m and fullnelbo.m
 
 % nonlinear models to be tested (out of nlf=1:5)
-%nlfvec=[1,2,4,5];
-% debugging:
-    nlfvec=2;
-
+nlfvec=[1:5];
 % number of folds - cross validation
 k=5;
 
@@ -51,7 +48,7 @@ rowperm=randperm(Nall);        % row vector of row/col IDs
 %%
 data=zeros(Nall,size(datain,2));
     for r=1:Nall
-    data(r,:)=(data(rowperm(r),:));
+    data(r,:)=(datain(rowperm(r),:));
     end
 %%
 if mod(Nall,k)~=0
@@ -109,8 +106,13 @@ for c=1:k
         Ytest=Yalltest(:,nlf);
         
         % perform model optimisation and prediction
-        [fhat,yhat,smse,fnlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
-        xvresults{c,idx}={ftest,fhat,Ytest,yhat,smse,fnlpd,optimresults};
+        try
+        [fhat,yhat,fsmse,fnlpd,ysmse,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest);
+        catch
+            display('Error while executing multitask_egp_ugp. Skipping to next model.');
+            continue;
+        end
+        xvresults{c,idx}={ftest,fhat,Ytest,yhat,fsmse,fnlpd,ysmse,optimresults};
         save('xvresults.mat','xvresults','-append');
         
 

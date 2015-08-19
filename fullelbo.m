@@ -16,8 +16,8 @@ function [fullF]=fullelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA,theta)
                 J=@(f) exp(f);
         case 4; g=@(f) sin(f);
                 J=@(f) cos(f);
-        case 5; g=@(f) tanh(f);
-                J=@(f) sech(f).^2;
+        case 5; g=@(f) tanh(2*f);
+                J=@(f) 2*(sech(2*f).^2);
     end
 
 

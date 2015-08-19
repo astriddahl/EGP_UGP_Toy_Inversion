@@ -1,4 +1,4 @@
-function [fhat,yhat,smse,fnlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
+function [fhat,yhat,fsmse,fnlpd,ysmse,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
 % Implementation of Multi-task Extended and Unscented Gaussian Process - a
 % la carte (Steinberg and Bonilla)
 % code by A Dahl 2015
@@ -48,8 +48,8 @@ function [fhat,yhat,smse,fnlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytes
                 J=@(f) exp(f);
         case 4; g=@(f) sin(f);
                 J=@(f) cos(f);
-        case 5; g=@(f) tanh(f);
-                J=@(f) sech(f).^2;
+        case 5; g=@(f) tanh(2*f);
+                J=@(f) 2*(sech(2*f).^2);
     end
 
 % define function evaluating objective function F (eqn 26) at
@@ -115,7 +115,8 @@ for z=1:N                                       % calculate Fn (sum elements of 
         phi_n=PHI(:,z);
         f=M*phi_n;
         J_n=J(f);                               %"Jacobian" dg/df
-        Hn=phi_n*J_n'*(1/DELTA)*J_n*phi_n';    % implemented for Q=1 only (eqn(11))-should extract q column of J_n
+        Hinner=J_n'*(1/DELTA)*J_n;              % Hn broken into two steps to improve stability of calculation
+        Hn=phi_n*Hinner*phi_n';    % implemented for Q=1, P=1 only (eqn(11))-should extract q column of J_n
         H=H+Hn;                                 %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only     
 end
 %%
@@ -127,8 +128,8 @@ C=-inv(H);
 %% Step 1. Loop to optimise hyperparameters given m - set up for numerical optimisation
 
 % track objective function value
-Fouter=zeros(maxiter,1);
-Finner=zeros(maxiter,1);
+Fouter=zeros(maxiter^2,1);
+Finner=zeros(maxiter^2,1);
 % initial values hyperparameters
 % hparams0=[diag(DELTA)', theta]';  fixing theta at true value
 hparams0=diag(DELTA);
@@ -184,12 +185,13 @@ for w=1:maxiter
                     J_n=J(f);                       %"Jacobian" dg/df
                     dFn=J_n*IDEL*(y_n-gn)*phi_n; % for multitask probably needs amending from eqn (15): phi_n to phi_n'
                     dF=dF+dFn;                     % add dFn to cumulative sum over n to be output from n-loop
-                    Hn=phi_n*J_n'*IDEL*J_n*phi_n';          % implemented for Q=1 only (eqn(11))-should extract q column of J_n
+                    Hinner=J_n'*IDEL*J_n;              % Hn broken into two steps to improve stability of calculation
+                    Hn=phi_n*Hinner*phi_n';    % implemented for Q=1, P=1 only (eqn(11))-should extract q column of J_n
                     H=H+Hn;                      %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only
                 end
                 dF=dF-ILAM*mk;
                 H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
-
+                
                 %learning step
                 mk1=mk-a^(v/2)*inv(H)*dF;       %learning rate decays slowly
 
@@ -201,15 +203,13 @@ for w=1:maxiter
                     phi_n=PHI(:,z);
                     f=M*phi_n;
                     J_n=J(f);                               %"Jacobian" dg/df
-                    Hn=phi_n*J_n'*(1/DELTA)*J_n*phi_n';    % implemented for Q=1 only (eqn(11))-should extract q column of J_n
+                    Hinner=J_n'*IDEL*J_n;              % Hn broken into two steps to improve stability of calculation
+                    Hn=phi_n*Hinner*phi_n';    % implemented for Q=1, P=1 only (eqn(11))-should extract q column of J_n
                     H=H+Hn;                                 %add Hn to cumulative sum over n to be output from n-loop - implemented for Q=1 only     
                     end
                     H=-H-ILAM*eye(D);            % needs review for Q>1 - won't work
                     C=-inv(H);                  % NB implemented for Q=1 only
-                [C_chol,p]=chol(C,'lower');
-                    if p~=0
-                        display('C not positive definite');
-                    end
+                
                 fullF=fullelbo(hparams,M,C,phi_in,Y,dims,nlf,LAMBDA,theta)
                     if isreal(fullF)==0
                     display('F complex');
@@ -220,8 +220,8 @@ for w=1:maxiter
                 dd=deltam-dd1                %calc change in deltam (ie check not diverging)
                 display('average M');
                 display(mean(M));
-                Finner(v)=fullF;
-                plot(Finner,'--+');
+                Finner(v*w)=fullF;
+                
 
             end % m+converged. If deltam below conv on last loop, M+ stops at mk1
                 if deltam<conv
@@ -243,9 +243,8 @@ for w=1:maxiter
             
         deltah=norm(abs(x-hparams))       
         hparams=x               % parameter update
-        Fouter(w)=f;
-        hold on;
-        plot(Fouter(w),'-d');
+        Fouter(v*w)=f;
+        
 
     end
     
@@ -276,7 +275,8 @@ if predict==1
    Y=Ytest;
    phi_in=phi_intest;
    f=ftest;
-   sdY=stdev(Y);
+   sdY=std(Y);
+   sdf=std(f);
         %update PHI with phi_intest
                 ntest=length(Y);
                 PHI=zeros(D,ntest);
@@ -301,7 +301,9 @@ if predict==1
                 end
    % calculate MSME and NLPD scores
     ydiff=(Y-yhat)/sdY;             %normalised by Ytest sample std dev.     
-    smse=mean(ydiff.^2);
+    ysmse=mean(ydiff.^2);
+    fdiff=(f-fhat)/sdf;
+    fsmse=mean(fdiff.^2);
     fnlpd=-mean(log(fpd));
                       
 end
