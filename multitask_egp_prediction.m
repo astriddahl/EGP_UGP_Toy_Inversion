@@ -3,7 +3,7 @@
 % prediction of f and y for five g(f) models (nlf=1:5) where
 %     f_qn=w_q*phi_n and y_n=g(f_n)+e
 %     y_n~N(A*M*phi_n,DELTA+sumq(a_q*phi_n'*C_q*phi_n*a_q')  - EQN(28)
-%     thus y_n_hat=A*M*phi_n   from EQN(28)
+%     thus y_n_hat=A*M*phi_n+b_n=g(f_n)   from EQN(28)
 %     
 %     f_qn_hat=m_q*phi_n
 %     P(f_qn)=P(w_q*phi_n) where phi_n is treated as a constant,
@@ -14,8 +14,13 @@
 % - currently written for univariate f
 
 clear;
+addpath(genpath('C:\Program Files\MATLAB\R2014b\astridlib')); %includes minfunc, opt toolbox and (for toyinvdata generation) gpmltoolbox
+addpath(genpath('C:\Users\adahl\Documents\MATLAB\EGP_UGP'));    %includes multitask_egp_ugp.m, nelbo.m and fullnelbo.m
+
 % nonlinear models to be tested (out of nlf=1:5)
-nlfvec=[1,2,4,5];
+%nlfvec=[1,2,4,5];
+% debugging:
+    nlfvec=2;
 
 % number of folds - cross validation
 k=5;
@@ -104,8 +109,8 @@ for c=1:k
         Ytest=Yalltest(:,nlf);
         
         % perform model optimisation and prediction
-        [fhat,yhat,mse,nlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
-        xvresults{c,idx}={fhat,yhat,mse,nlpd,optimresults};
+        [fhat,yhat,smse,fnlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
+        xvresults{c,idx}={ftest,fhat,Ytest,yhat,smse,fnlpd,optimresults};
         save('xvresults.mat','xvresults','-append');
         
 

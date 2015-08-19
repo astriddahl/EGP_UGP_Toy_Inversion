@@ -1,4 +1,4 @@
-function [fhat,yhat,mse,nlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
+function [fhat,yhat,smse,fnlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,ftest,phi_intest)
 % Implementation of Multi-task Extended and Unscented Gaussian Process - a
 % la carte (Steinberg and Bonilla)
 % code by A Dahl 2015
@@ -27,10 +27,10 @@ function [fhat,yhat,mse,nlpd,optimresults]=multitask_egp_ugp(nlf,Y,phi_in,Ytest,
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Setup
-addpath(genpath('C:\Program Files\MATLAB\R2014b\astridlib')); %requires minfunc, opt toolbox and (for toyinvdata generation) gpmltoolbox
-addpath(genpath('C:\Users\adahl\Documents\MATLAB\EGP_UGP'));    %includes nelbo.m and fullnelbo.m
+% addpath(genpath('C:\Program Files\MATLAB\R2014b\astridlib')); %requires minfunc, opt toolbox and (for toyinvdata generation) gpmltoolbox
+% addpath(genpath('C:\Users\adahl\Documents\MATLAB\EGP_UGP'));    %includes nelbo.m and fullnelbo.m
 % include logging
-clear;
+%clear;
 % definitions
 % X Y raw input data - requires matrices Y(NxP) and X(Nxd)
     % *** at present no generic code for this - inputs from toyinvdata
@@ -72,7 +72,7 @@ dims=[N,D,P,Q];
 % method            - choose MAP/grad descent or stat linearisation
                       % ***at present implemented for grad desc only
 % predict           - choose whether to perform prediction step (1=yes/0=no)
-predict=0; 
+predict=1; 
 maxiter=50;           % - choose max iterations (currently assigned for both overall loop and M/C loop)
 conv=0.001;                %- choose convergence threshold (for params)
 deltam=1;           %initialise convergence measure for inner loop > conv
@@ -220,7 +220,7 @@ for w=1:maxiter
                 dd=deltam-dd1                %calc change in deltam (ie check not diverging)
                 display('average M');
                 display(mean(M));
-                Finner(v)=-fullF;
+                Finner(v)=fullF;
                 plot(Finner,'--+');
 
             end % m+converged. If deltam below conv on last loop, M+ stops at mk1
@@ -270,36 +270,39 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Prediction
+%implemented for P=1, Q=1 only
 if predict==1
    %generate [fhat,yhat,mse,nlpd] using Ytest,ftest,phi_intest
    Y=Ytest;
    phi_in=phi_intest;
    f=ftest;
+   sdY=stdev(Y);
         %update PHI with phi_intest
                 ntest=length(Y);
                 PHI=zeros(D,ntest);
                 PHI(1:D/2,:)=cos(phi_in/theta);
                 PHI(D/2+1:D,:)=sin(phi_in/theta);
                 PHI=sqrt(2/D)*PHI;
-    % calculate fhat,yhat, y-yhat, P(fhat)
-    % insert matrix to gather n predictions/differences
+    % calculate fhat,yhat,P(fhat)
+    fhat=zeros(ntest,1);
+    yhat=zeros(ntest,1);
+    fpd=zeros(ntest,1);
                 for z=1:ntest                                       
-                    y_n=Y(z,:)';
                     phi_n=PHI(:,z);
                     fhatn=M*phi_n;
-                    J_n=J(fhatn);
-                    vecn=J_n*M*phi_in;
-                    b_n=g(fhatn)-vecn;
-                    yhatn=vecn+b_n;             % just realised this is g(fhatn) so vecn and b_n may be redundant
-                    v_yhatn=DELTA+J_n*phi_n'*C*phi_n*J_n';  %implemented for Q=1 only    
-                    dyn=y_n-yhatn;
+                    fhat(z)=fhatn;
+                    yhat(z)=g(fhatn);
+                    %J_n=J(fhatn);
+                    %vecn=J_n*M*phi_in;
+                    %v_yn=DELTA+J_n*phi_n'*C*phi_n*J_n';  %implemented for Q=1 only    
                     %p_fn=P(f_qn|phi_n,M,C)~N(phi_n'm,phi_n'Cphi_n)
-                    % find function to return value of normal function with
-                    % above parameters
+                    v_fn=phi_n'*C*phi_n;
+                    fpd(z)=normpdf(f(z),fhatn,v_fn);
                 end
-                    
    % calculate MSME and NLPD scores
-                    
+    ydiff=(Y-yhat)/sdY;             %normalised by Ytest sample std dev.     
+    smse=mean(ydiff.^2);
+    fnlpd=-mean(log(fpd));
                       
 end
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
