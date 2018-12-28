@@ -1,5 +1,5 @@
 # EGP_UGP_Toy_Inversion
-Early clone of (kitchen sinks)[https://github.com/ebonilla/gp-kitchen-sinks] for code checking and testing.
+Early clone of [kitchen sinks](https://github.com/ebonilla/gp-kitchen-sinks) for code checking and testing.
 Matlab files for EGP_UGP algorithm
 
 Files:
